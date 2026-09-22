@@ -14,6 +14,7 @@ import (
 
 	"github.com/mdfranz/mcpctl/internal/client"
 	"github.com/mdfranz/mcpctl/internal/status"
+	"github.com/mdfranz/mcpctl/internal/tui"
 )
 
 func main() {
@@ -22,8 +23,7 @@ func main() {
 
 func run(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "mcpctl: TUI not implemented yet; try `mcpctl status`")
-		return 2
+		return runTUI(nil)
 	}
 
 	switch args[0] {
@@ -31,6 +31,8 @@ func run(args []string) int {
 		return runStatus(args[1:])
 	case "doctor":
 		return runDoctor(args[1:])
+	case "tui":
+		return runTUI(args[1:])
 	case "-h", "--help", "help":
 		printUsage()
 		return 0
@@ -41,12 +43,29 @@ func run(args []string) int {
 	}
 }
 
+func runTUI(args []string) int {
+	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
+	dir := fs.String("dir", ".", "project directory")
+	timeout := fs.Duration("timeout", 15*time.Second, "per-command timeout")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if err := tui.Run(*dir, *timeout); err != nil {
+		fmt.Fprintf(os.Stderr, "mcpctl: %v\n", err)
+		return 2
+	}
+	return 0
+}
+
 func printUsage() {
-	fmt.Fprintln(os.Stderr, `usage: mcpctl <command> [flags]
+	fmt.Fprintln(os.Stderr, `usage: mcpctl [command] [flags]
+
+no command launches the interactive TUI in the current directory.
 
 commands:
   status    show live project MCP server status across all clients
   doctor    local preflight: config syntax, executables, env vars, URLs
+  tui       explicitly launch the interactive TUI
   help      show this message`)
 }
 
