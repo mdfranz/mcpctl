@@ -62,6 +62,8 @@ func Check(ctx context.Context, dir string, timeout time.Duration) (*Report, err
 		report.Codex = checkCodex(ctx, dir, timeout, snap.Codex.Servers)
 	}()
 	wg.Wait()
+	applyGlobalAttribution(&report.Claude, dir, "claude")
+	applyGlobalAttribution(&report.Codex, dir, "codex")
 
 	return report, nil
 }
@@ -158,14 +160,16 @@ func reconcile(cr *ClientReport, clientName string, fileServers map[string]confi
 			continue
 		}
 		res := Result{
-			ServerName:  name,
-			Client:      clientName,
-			ConfigState: ConfigPresent,
-			Connection:  ConnectionUnchecked,
-			AuthState:   AuthUnknown,
-			AuthMethod:  AuthMethodUnknown,
-			Scope:       ScopeProject,
-			CheckedAt:   time.Now(),
+			ServerName:       name,
+			Client:           clientName,
+			ConfigState:      ConfigPresent,
+			Connection:       ConnectionUnchecked,
+			AuthState:        AuthUnknown,
+			AuthMethod:       AuthMethodUnknown,
+			Scope:            ScopeProject,
+			Source:           SourceProject,
+			SourceConfidence: SourceConfirmed,
+			CheckedAt:        time.Now(),
 		}
 		if cr.Availability.Present {
 			res.ClientVersion = cr.Availability.Version

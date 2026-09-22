@@ -28,3 +28,15 @@ func TestResultDisplay(t *testing.T) {
 		})
 	}
 }
+
+func TestSourceDisplay(t *testing.T) {
+	if got := sourceDisplay(status.Result{Source: status.SourceProject, SourceConfidence: status.SourceConfirmed}); got != "source=project" {
+		t.Errorf("sourceDisplay(confirmed) = %q", got)
+	}
+	if got := sourceDisplay(status.Result{Source: status.SourceProject, SourceConfidence: status.SourceInferred}); got != "source=project (inferred)" {
+		t.Errorf("sourceDisplay(inferred) = %q", got)
+	}
+	if got := sourceDisplay(status.Result{Source: status.SourceUnknown}); got != "source=unknown" {
+		t.Errorf("sourceDisplay(unknown) = %q", got)
+	}
+}

@@ -8,6 +8,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -106,6 +108,9 @@ func showStatusProgress(done <-chan struct{}) {
 }
 
 func printReport(report *status.Report) {
+	printProjectContext(report.Dir)
+	fmt.Println()
+
 	clients := []struct {
 		name   string
 		report status.ClientReport
@@ -124,6 +129,9 @@ func printReport(report *status.Report) {
 		} else {
 			for _, r := range results {
 				symbol, text := resultDisplay(r)
+				if source := sourceDisplay(r); source != "" {
+					text += " · " + source
+				}
 				if r.Target != "" {
 					fmt.Printf("  %s %-30s %-30s %s\n", symbol, r.ServerName, text, r.Target)
 				} else {
@@ -135,6 +143,56 @@ func printReport(report *status.Report) {
 			fmt.Println()
 		}
 	}
+}
+
+func printProjectContext(dir string) {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		absDir = dir
+	}
+	fmt.Printf("Project: %s\n", absDir)
+
+	gitState := readGitState(dir)
+	if gitState == "" {
+		fmt.Println("Git:     not a repository")
+		return
+	}
+	parts := strings.SplitN(gitState, "\n", 2)
+	branch := strings.TrimPrefix(parts[0], "## ")
+	if len(parts) == 1 || strings.TrimSpace(parts[1]) == "" {
+		fmt.Printf("Git:     %s (clean)\n", branch)
+		return
+	}
+	fmt.Printf("Git:     %s (modified)\n", branch)
+}
+
+func readGitState(dir string) string {
+	cmd := exec.Command("git", "-C", dir, "status", "--short", "--branch")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func sourceDisplay(r status.Result) string {
+	if r.Source == status.SourceUnknown || r.Source == "" {
+		return "source=unknown"
+	}
+	label := "source=" + string(r.Source)
+	if r.SourceConfidence == status.SourceInferred {
+		label += " (inferred)"
+	}
+	if r.SourcePath != "" {
+		path := r.SourcePath
+		if home, err := os.UserHomeDir(); err == nil {
+			if rel, err := filepath.Rel(home, path); err == nil && rel != "." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				path = "~/" + filepath.ToSlash(rel)
+			}
+		}
+		label += " (" + path + ")"
+	}
+	return label
 }
 
 func resultDisplay(r status.Result) (string, string) {

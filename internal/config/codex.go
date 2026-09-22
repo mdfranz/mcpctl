@@ -42,7 +42,12 @@ type CodexSnapshot struct {
 // LoadCodex reads and parses dir/.codex/config.toml. A missing file is
 // not an error: Exists is false and Servers is empty.
 func LoadCodex(dir string) (*CodexSnapshot, error) {
-	path := filepath.Join(dir, CodexConfigDir, CodexConfigFile)
+	return LoadCodexFile(filepath.Join(dir, CodexConfigDir, CodexConfigFile))
+}
+
+// LoadCodexFile reads a Codex config from an explicit path. It is used for
+// read-only attribution of user-level configuration.
+func LoadCodexFile(path string) (*CodexSnapshot, error) {
 	snap := &CodexSnapshot{
 		Path:        path,
 		Servers:     map[string]Server{},

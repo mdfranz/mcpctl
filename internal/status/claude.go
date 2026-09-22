@@ -82,14 +82,30 @@ var claudeScopeLine = regexp.MustCompile(`(?m)^\s*Scope:\s*(.+)$`)
 // .mcp.json)" -> ScopeProject. Any other populated Scope line is treated
 // as ScopeOther (some non-project source) rather than guessed further.
 func parseClaudeScope(getOutput string) Scope {
+	scope, _, _ := parseClaudeAttribution(getOutput)
+	return scope
+}
+
+func parseClaudeAttribution(getOutput string) (Scope, SourceKind, SourceConfidence) {
 	m := claudeScopeLine.FindStringSubmatch(getOutput)
 	if m == nil {
-		return ScopeUnknown
+		return ScopeUnknown, SourceUnknown, SourceUnknownConfidence
 	}
-	if strings.Contains(m[1], "Project config") {
-		return ScopeProject
+	sourceText := strings.ToLower(m[1])
+	switch {
+	case strings.Contains(sourceText, "project config"):
+		return ScopeProject, SourceProject, SourceConfirmed
+	case strings.Contains(sourceText, "plugin"):
+		return ScopeOther, SourcePlugin, SourceConfirmed
+	case strings.Contains(sourceText, "managed") || strings.Contains(sourceText, "enterprise"):
+		return ScopeOther, SourceManaged, SourceConfirmed
+	case strings.Contains(sourceText, "global"):
+		return ScopeOther, SourceGlobal, SourceConfirmed
+	case strings.Contains(sourceText, "user") || strings.Contains(sourceText, "claude.ai"):
+		return ScopeOther, SourceUser, SourceConfirmed
+	default:
+		return ScopeOther, SourceUnknown, SourceConfirmed
 	}
-	return ScopeOther
 }
 
 // BuildClaudeResults turns one `claude mcp list` run into Results. getFor,
@@ -102,24 +118,26 @@ func BuildClaudeResults(listOut, clientVersion string, checkedAt time.Time, list
 	for _, e := range entries {
 		configState, conn, auth, checkState := classifyClaudeStatus(e.StatusText)
 		res := Result{
-			ServerName:    e.Name,
-			Client:        "claude",
-			ClientVersion: clientVersion,
-			Target:        e.Descriptor,
-			ConfigState:   configState,
-			Connection:    conn,
-			AuthState:     auth,
-			AuthMethod:    AuthMethodUnknown,
-			CheckState:    checkState,
-			Scope:         ScopeUnknown,
-			CheckedAt:     checkedAt,
-			Evidence:      []Evidence{listEvidence},
+			ServerName:       e.Name,
+			Client:           "claude",
+			ClientVersion:    clientVersion,
+			Target:           e.Descriptor,
+			ConfigState:      configState,
+			Connection:       conn,
+			AuthState:        auth,
+			AuthMethod:       AuthMethodUnknown,
+			CheckState:       checkState,
+			Scope:            ScopeUnknown,
+			Source:           SourceUnknown,
+			SourceConfidence: SourceUnknownConfidence,
+			CheckedAt:        checkedAt,
+			Evidence:         []Evidence{listEvidence},
 		}
 		if getFor != nil {
 			getOut, getEv, err := getFor(e.Name)
 			res.Evidence = append(res.Evidence, getEv)
 			if err == nil {
-				res.Scope = parseClaudeScope(getOut)
+				res.Scope, res.Source, res.SourceConfidence = parseClaudeAttribution(getOut)
 			}
 		}
 		results = append(results, res)
