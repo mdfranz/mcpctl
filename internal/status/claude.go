@@ -13,7 +13,11 @@ type claudeListEntry struct {
 	StatusText string
 }
 
-var claudeListLine = regexp.MustCompile(`^([^:\s][^:]*):\s*(.+?)\s+-\s+(.+)$`)
+// Claude separates a server name from its descriptor with a colon followed by
+// whitespace. Names themselves may contain colons (for example plugin server
+// names such as "plugin:logfire:logfire"), so the separator must not match a
+// bare colon inside the name or inside a URL such as "https://".
+var claudeListLine = regexp.MustCompile(`^([^\s].*?):[ \t]+(.+?)\s+-\s+(.+)$`)
 
 // parseClaudeList parses `claude mcp list` output. It tolerates a leading
 // informational warning line (observed: a claude.ai-connectors notice)
@@ -101,6 +105,7 @@ func BuildClaudeResults(listOut, clientVersion string, checkedAt time.Time, list
 			ServerName:    e.Name,
 			Client:        "claude",
 			ClientVersion: clientVersion,
+			Target:        e.Descriptor,
 			ConfigState:   configState,
 			Connection:    conn,
 			AuthState:     auth,

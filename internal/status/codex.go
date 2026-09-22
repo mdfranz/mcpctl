@@ -123,6 +123,7 @@ func BuildCodexResults(listJSON []byte, clientVersion string, checkedAt time.Tim
 			ServerName:    e.Name,
 			Client:        "codex",
 			ClientVersion: clientVersion,
+			Target:        e.Transport.URL,
 			ConfigState:   configState,
 			Connection:    ConnectionUnchecked,
 			AuthState:     authState,

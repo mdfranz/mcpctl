@@ -53,6 +53,40 @@ func TestParseClaudeList_PendingApproval(t *testing.T) {
 	}
 }
 
+func TestParseClaudeList_NamespacedServerName(t *testing.T) {
+	out := readFixture(t, "../../testdata/clients/claude/list_namespaced.txt")
+	entries := parseClaudeList(out)
+	if len(entries) != 2 {
+		t.Fatalf("entries = %+v, want 2", entries)
+	}
+	if got := entries[0].Name; got != "plugin:logfire:logfire" {
+		t.Fatalf("namespaced name = %q, want %q", got, "plugin:logfire:logfire")
+	}
+	if got := entries[0].Descriptor; got != "logfire" {
+		t.Errorf("namespaced descriptor = %q, want %q", got, "logfire")
+	}
+}
+
+func TestBuildClaudeResults_NamespacedServerUsesCompleteName(t *testing.T) {
+	out := readFixture(t, "../../testdata/clients/claude/list_namespaced.txt")
+	var gotNames []string
+	getFor := func(name string) (string, Evidence, error) {
+		gotNames = append(gotNames, name)
+		return "Scope: Project config (shared via .mcp.json)", Evidence{}, nil
+	}
+
+	results := BuildClaudeResults(out, "2.1.278", time.Now(), Evidence{}, getFor)
+	if len(results) != 2 {
+		t.Fatalf("results = %+v, want 2", results)
+	}
+	if gotNames[0] != "plugin:logfire:logfire" {
+		t.Errorf("get called with %q, want complete namespaced name", gotNames[0])
+	}
+	if results[0].ServerName != "plugin:logfire:logfire" {
+		t.Errorf("result name = %q, want complete namespaced name", results[0].ServerName)
+	}
+}
+
 func TestParseClaudeGet_ProjectScope(t *testing.T) {
 	out := readFixture(t, "../../testdata/clients/claude/get_stdio_pending_approval.txt")
 	if scope := parseClaudeScope(out); scope != ScopeProject {
@@ -79,6 +113,11 @@ func TestBuildClaudeResults_UsesGetForScope(t *testing.T) {
 		}
 		if r.ConfigState != ConfigPendingApproval {
 			t.Errorf("%s: ConfigState = %v", r.ServerName, r.ConfigState)
+		}
+	}
+	for _, r := range results {
+		if r.ServerName == "fake-remote" && r.Target != "https://example.invalid/mcp (HTTP)" {
+			t.Errorf("fake-remote Target = %q, want remote URL", r.Target)
 		}
 	}
 }
@@ -116,6 +155,9 @@ func TestParseCodexList_JSON(t *testing.T) {
 	}
 
 	remote := byName["fake-remote"]
+	if remote.Target != "https://example.invalid/mcp" {
+		t.Errorf("fake-remote Target = %q, want remote URL", remote.Target)
+	}
 	if remote.AuthState != AuthUnknown {
 		t.Errorf("fake-remote AuthState = %v, want unknown (codex reported auth_status=unknown)", remote.AuthState)
 	}
@@ -141,6 +183,11 @@ func TestCodexScope_MismatchIsOther(t *testing.T) {
 		}
 		if r.ServerName == "fake-remote" && r.Scope != ScopeOther {
 			t.Errorf("fake-remote Scope = %v, want other (not in projectServers at all)", r.Scope)
+		}
+	}
+	for _, r := range results {
+		if r.ServerName == "fake-remote" && r.Target != "https://example.invalid/mcp" {
+			t.Errorf("fake-remote Target = %q, want remote URL", r.Target)
 		}
 	}
 }

@@ -1,0 +1,4 @@
+Checking MCP server health…
+
+plugin:logfire:logfire: logfire - ✓ Connected
+regular-server: node server.js - ✘ Failed to connect

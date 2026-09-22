@@ -124,6 +124,7 @@ func BuildOpenCodeResults(listOut, clientVersion string, checkedAt time.Time, li
 			ServerName:    e.Name,
 			Client:        "opencode",
 			ClientVersion: clientVersion,
+			Target:        openCodeTarget(e.Detail),
 			ConfigState:   configState,
 			Connection:    conn,
 			AuthState:     AuthUnknown,
@@ -139,4 +140,13 @@ func BuildOpenCodeResults(listOut, clientVersion string, checkedAt time.Time, li
 		results = append(results, res)
 	}
 	return results
+}
+
+func openCodeTarget(details []string) string {
+	for _, detail := range details {
+		if strings.Contains(detail, "http://") || strings.Contains(detail, "https://") {
+			return detail
+		}
+	}
+	return ""
 }

@@ -85,6 +85,9 @@ type Result struct {
 	ServerName    string
 	Client        string
 	ClientVersion string
+	// Target is the observed URL or stdio command, when the client exposes it.
+	// It is display metadata, not a claim that the target is reachable.
+	Target string
 
 	ConfigState ConfigState
 	Connection  ConnectionState
