@@ -19,6 +19,9 @@ type viewKind int
 const (
 	viewList viewKind = iota
 	viewDetail
+	viewForm
+	viewConfirmDelete
+	viewPreview
 )
 
 // clientOrder is the fixed column/section order used throughout the TUI.
@@ -43,6 +46,13 @@ type Model struct {
 
 	names  []string
 	cursor int
+
+	form          formModel
+	pendingDelete string
+	plan          *config.Plan
+	previewAction string
+	applying      bool
+	applyErr      error
 
 	quitting bool
 }
@@ -113,8 +123,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusErr = msg.err
 		return m, nil
 
+	case applyResultMsg:
+		m.applying = false
+		if msg.err != nil {
+			m.applyErr = msg.err
+			return m, nil
+		}
+		m.view = viewList
+		m.plan = nil
+		m.loadingCfg = true
+		return m, loadConfigCmd(m.dir)
+
 	case tea.KeyMsg:
-		return m.handleKey(msg)
+		switch m.view {
+		case viewForm:
+			return m.updateForm(msg)
+		case viewConfirmDelete:
+			return m.updateConfirmDelete(msg)
+		case viewPreview:
+			return m.updatePreview(msg)
+		default:
+			return m.handleKey(msg)
+		}
 	}
 	return m, nil
 }
@@ -160,8 +190,42 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.loadingStat = true
 			return m, loadStatusCmd(m.dir, m.timeout)
 		}
+	case "a":
+		m.form = newAddForm()
+		m.view = viewForm
+	case "e":
+		if len(m.names) == 0 {
+			return m, nil
+		}
+		name := m.names[m.cursor]
+		srv, ok := m.canonicalServer(name)
+		if !ok {
+			return m, nil
+		}
+		m.form = newEditForm(name, srv)
+		m.view = viewForm
+	case "d":
+		if len(m.names) == 0 {
+			return m, nil
+		}
+		m.pendingDelete = m.names[m.cursor]
+		m.view = viewConfirmDelete
 	}
 	return m, nil
+}
+
+// canonicalServer picks a starting definition for editing serverName,
+// preferring Claude, then OpenCode, then Codex -- the same precedence
+// order the plan proposes for conflict resolution. If the three clients'
+// definitions actually differ, the preview after submission will show
+// exactly what changes on each one.
+func (m Model) canonicalServer(name string) (config.Server, bool) {
+	for _, c := range clientOrder {
+		if srv, ok := m.fileServer(c, name); ok {
+			return srv, true
+		}
+	}
+	return config.Server{}, false
 }
 
 func (m Model) View() string {
@@ -178,6 +242,12 @@ func (m Model) View() string {
 	switch m.view {
 	case viewDetail:
 		return m.renderDetail()
+	case viewForm:
+		return m.form.View()
+	case viewConfirmDelete:
+		return m.renderConfirmDelete()
+	case viewPreview:
+		return m.renderPreview()
 	default:
 		return m.renderList()
 	}
