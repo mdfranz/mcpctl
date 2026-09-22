@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/mdfranz/mcpctl/internal/config"
 )
 
 func writeDoctorFixture(t *testing.T, path, contents string) {
@@ -222,5 +224,20 @@ func TestRunDoctor_EmptyProjectHasNoFindings(t *testing.T) {
 	}
 	if report.Summary.ServersChecked != 0 {
 		t.Errorf("ServersChecked = %d, want 0", report.Summary.ServersChecked)
+	}
+}
+
+func TestOpenCodeInterpolationWarning(t *testing.T) {
+	var findings []Finding
+	checkOpenCodeInterpolation("oneleet", config.Server{
+		Headers: map[string]config.HeaderValue{
+			"Authorization": {Kind: config.EnvVarLiteral, Value: "Bearer ${ONELEET_API_KEY}"},
+		},
+	}, func(f Finding) { findings = append(findings, f) })
+	if len(findings) != 1 || findings[0].Severity != SeverityError {
+		t.Fatalf("findings = %+v, want one syntax error", findings)
+	}
+	if !strings.Contains(findings[0].NextStep, "{env:ONELEET_API_KEY}") {
+		t.Errorf("NextStep = %q, want OpenCode syntax guidance", findings[0].NextStep)
 	}
 }

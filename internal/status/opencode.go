@@ -92,9 +92,14 @@ func classifyOpenCodeStatus(statusText string) (ConfigState, ConnectionState, Ch
 // only source checked, so a name-only match without a descriptor match
 // is reported as ScopeUnknown rather than assumed to be this project's.
 func opencodeScope(entry opencodeEntry, projectServers map[string]config.Server) Scope {
+	scope, _, _ := opencodeAttribution(entry, projectServers)
+	return scope
+}
+
+func opencodeAttribution(entry opencodeEntry, projectServers map[string]config.Server) (Scope, SourceKind, SourceConfidence) {
 	proj, ok := projectServers[entry.Name]
 	if !ok {
-		return ScopeOther
+		return ScopeOther, SourceUnknown, SourceUnknownConfidence
 	}
 	var want string
 	switch proj.Type {
@@ -104,14 +109,14 @@ func opencodeScope(entry opencodeEntry, projectServers map[string]config.Server)
 		want = proj.URL
 	}
 	if want == "" {
-		return ScopeUnknown
+		return ScopeUnknown, SourceUnknown, SourceUnknownConfidence
 	}
 	for _, d := range entry.Detail {
 		if strings.Contains(d, want) {
-			return ScopeProject
+			return ScopeProject, SourceProject, SourceInferred
 		}
 	}
-	return ScopeUnknown
+	return ScopeUnknown, SourceUnknown, SourceUnknownConfidence
 }
 
 // BuildOpenCodeResults turns one `opencode mcp list` run into Results.
@@ -120,23 +125,39 @@ func BuildOpenCodeResults(listOut, clientVersion string, checkedAt time.Time, li
 	results := make([]Result, 0, len(entries))
 	for _, e := range entries {
 		configState, conn, checkState := classifyOpenCodeStatus(e.StatusText)
+		scope, source, confidence := opencodeAttribution(e, projectServers)
 		res := Result{
-			ServerName:    e.Name,
-			Client:        "opencode",
-			ClientVersion: clientVersion,
-			ConfigState:   configState,
-			Connection:    conn,
-			AuthState:     AuthUnknown,
-			AuthMethod:    AuthMethodUnknown,
-			CheckState:    checkState,
-			Scope:         opencodeScope(e, projectServers),
-			CheckedAt:     checkedAt,
-			Evidence:      []Evidence{listEvidence},
+			ServerName:       e.Name,
+			Client:           "opencode",
+			ClientVersion:    clientVersion,
+			Target:           openCodeTarget(e.Detail),
+			ConfigState:      configState,
+			Connection:       conn,
+			AuthState:        AuthUnknown,
+			AuthMethod:       AuthMethodUnknown,
+			CheckState:       checkState,
+			Scope:            scope,
+			Source:           source,
+			SourceConfidence: confidence,
+			CheckedAt:        checkedAt,
+			Evidence:         []Evidence{listEvidence},
 		}
 		if len(e.Detail) > 0 {
 			res.Evidence = append(res.Evidence, Evidence{Summary: strings.Join(e.Detail, " | ")})
 		}
+		if confidence == SourceInferred {
+			res.Evidence = append(res.Evidence, Evidence{Summary: "source inferred by matching the project configuration"})
+		}
 		results = append(results, res)
 	}
 	return results
+}
+
+func openCodeTarget(details []string) string {
+	for _, detail := range details {
+		if strings.Contains(detail, "http://") || strings.Contains(detail, "https://") {
+			return detail
+		}
+	}
+	return ""
 }

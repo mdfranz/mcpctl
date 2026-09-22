@@ -72,21 +72,26 @@ func classifyCodexAuth(authStatus string, bearerEnvVar *string) (AuthState, Auth
 // project's own .codex/config.toml, and is only ever a best-effort
 // attribution, never a claim the client itself confirmed.
 func codexScope(entry codexServerEntry, projectServers map[string]config.Server) Scope {
+	scope, _, _ := codexAttribution(entry, projectServers)
+	return scope
+}
+
+func codexAttribution(entry codexServerEntry, projectServers map[string]config.Server) (Scope, SourceKind, SourceConfidence) {
 	proj, ok := projectServers[entry.Name]
 	if !ok {
-		return ScopeOther
+		return ScopeOther, SourceUnknown, SourceUnknownConfidence
 	}
 	switch entry.Transport.Type {
 	case "stdio":
 		if proj.Type == config.ServerTypeStdio && proj.Command == entry.Transport.Command {
-			return ScopeProject
+			return ScopeProject, SourceProject, SourceInferred
 		}
 	case "streamable_http", "http", "sse":
 		if proj.Type == config.ServerTypeRemote && proj.URL == entry.Transport.URL {
-			return ScopeProject
+			return ScopeProject, SourceProject, SourceInferred
 		}
 	}
-	return ScopeOther
+	return ScopeOther, SourceUnknown, SourceUnknownConfidence
 }
 
 // BuildCodexResults turns one `codex mcp list --json` run into Results.
@@ -119,18 +124,25 @@ func BuildCodexResults(listJSON []byte, clientVersion string, checkedAt time.Tim
 			entryEvidence.Summary += fmt.Sprintf(" disabled_reason=%q", *e.DisabledReason)
 		}
 
+		scope, source, confidence := codexAttribution(e, projectServers)
+		if confidence == SourceInferred {
+			entryEvidence.Summary += " source=inferred(project descriptor match)"
+		}
 		results = append(results, Result{
-			ServerName:    e.Name,
-			Client:        "codex",
-			ClientVersion: clientVersion,
-			ConfigState:   configState,
-			Connection:    ConnectionUnchecked,
-			AuthState:     authState,
-			AuthMethod:    authMethod,
-			CheckState:    CheckComplete,
-			Scope:         codexScope(e, projectServers),
-			CheckedAt:     checkedAt,
-			Evidence:      []Evidence{entryEvidence},
+			ServerName:       e.Name,
+			Client:           "codex",
+			ClientVersion:    clientVersion,
+			Target:           e.Transport.URL,
+			ConfigState:      configState,
+			Connection:       ConnectionUnchecked,
+			AuthState:        authState,
+			AuthMethod:       authMethod,
+			CheckState:       CheckComplete,
+			Scope:            scope,
+			Source:           source,
+			SourceConfidence: confidence,
+			CheckedAt:        checkedAt,
+			Evidence:         []Evidence{entryEvidence},
 		})
 	}
 	return results, nil

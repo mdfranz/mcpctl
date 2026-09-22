@@ -68,6 +68,28 @@ const (
 	ScopeUnknown Scope = "unknown"
 )
 
+// SourceKind identifies where a client says a server configuration came from.
+// Scope is retained for compatibility; Source is more specific when the
+// client exposes that information.
+type SourceKind string
+
+const (
+	SourceProject SourceKind = "project"
+	SourceUser    SourceKind = "user"
+	SourceGlobal  SourceKind = "global"
+	SourcePlugin  SourceKind = "plugin"
+	SourceManaged SourceKind = "managed"
+	SourceUnknown SourceKind = "unknown"
+)
+
+type SourceConfidence string
+
+const (
+	SourceConfirmed         SourceConfidence = "confirmed"
+	SourceInferred          SourceConfidence = "inferred"
+	SourceUnknownConfidence SourceConfidence = "unknown"
+)
+
 // Evidence is one redacted, bounded record of a command run to produce
 // (part of) a Result.
 type Evidence struct {
@@ -85,13 +107,17 @@ type Result struct {
 	ServerName    string
 	Client        string
 	ClientVersion string
+	Target        string // observed URL or stdio command, when exposed
 
-	ConfigState ConfigState
-	Connection  ConnectionState
-	AuthState   AuthState
-	AuthMethod  AuthMethod
-	CheckState  CheckState
-	Scope       Scope
+	ConfigState      ConfigState
+	Connection       ConnectionState
+	AuthState        AuthState
+	AuthMethod       AuthMethod
+	CheckState       CheckState
+	Scope            Scope
+	Source           SourceKind
+	SourceConfidence SourceConfidence
+	SourcePath       string
 
 	CheckedAt time.Time
 	Duration  time.Duration

@@ -160,3 +160,44 @@ func TestHandleKey_Navigation(t *testing.T) {
 		t.Errorf("expected esc to return to list view")
 	}
 }
+
+func TestEditUsesConflictSourcePicker(t *testing.T) {
+	m := testModel()
+	m.snap.OpenCode.Servers["files"] = config.Server{Name: "files", Type: config.ServerTypeStdio, Command: "different-command"}
+	m.names = m.snap.ServerNames()
+	updated, _ := m.handleKey(keyMsg("e"))
+	m = updated.(Model)
+	if m.view != viewConflict {
+		t.Fatalf("view after editing conflicting server = %v, want conflict picker", m.view)
+	}
+	if len(m.conflictClients) != 2 {
+		t.Fatalf("conflict clients = %v, want two", m.conflictClients)
+	}
+	m, _ = m.updateConflict(keyMsg("down"))
+	m, _ = m.updateConflict(keyMsg("enter"))
+	if m.view != viewForm {
+		t.Fatalf("view after choosing conflict source = %v, want form", m.view)
+	}
+	if m.form.commandInput.Value() != "different-command" {
+		t.Errorf("form command = %q, want selected OpenCode definition", m.form.commandInput.Value())
+	}
+}
+
+func TestLoginClientPicker(t *testing.T) {
+	m := testModel()
+	updated, _ := m.handleKey(keyMsg("l"))
+	m = updated.(Model)
+	if m.view != viewAuth {
+		t.Fatalf("view after login key = %v, want auth picker", m.view)
+	}
+	if len(m.authClients) != 1 || m.authClients[0] != "claude" {
+		t.Fatalf("auth clients = %v, want [claude]", m.authClients)
+	}
+	cmd := authProcess("/tmp/project", "claude", "files")
+	if got := cmd.Args; len(got) != 4 || got[0] != "claude" || got[1] != "mcp" || got[2] != "login" || got[3] != "files" {
+		t.Errorf("auth argv = %v", got)
+	}
+	if cmd.Dir != "/tmp/project" {
+		t.Errorf("auth cwd = %q, want project directory", cmd.Dir)
+	}
+}

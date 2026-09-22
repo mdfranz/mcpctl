@@ -61,7 +61,7 @@ func (m Model) renderList() string {
 const cellWidth = 16
 
 func helpLine() string {
-	return "↑/↓ move · enter detail · a add · e edit · d delete · r reload · s refresh · q quit"
+	return "↑/↓ move · enter detail · (a)dd · (e)dit · (d)elete · (l)ogin · (r)eload · refre(s)h · (q)uit"
 }
 
 func padRight(s string, width int) string {
