@@ -53,6 +53,16 @@ func TestParseClaudeList_PendingApproval(t *testing.T) {
 	}
 }
 
+func TestParseClaudeList_PreservesNamespacedNames(t *testing.T) {
+	entries := parseClaudeList("plugin:logfire:logfire: https://logfire-us.pydantic.dev/mcp (HTTP) - ⊘ Disabled for this project\n")
+	if len(entries) != 1 {
+		t.Fatalf("entries = %+v, want one", entries)
+	}
+	if entries[0].Name != "plugin:logfire:logfire" {
+		t.Errorf("name = %q, want complete namespaced name", entries[0].Name)
+	}
+}
+
 func TestParseClaudeGet_ProjectScope(t *testing.T) {
 	out := readFixture(t, "../../testdata/clients/claude/get_stdio_pending_approval.txt")
 	if scope := parseClaudeScope(out); scope != ScopeProject {

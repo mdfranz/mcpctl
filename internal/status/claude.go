@@ -13,7 +13,7 @@ type claudeListEntry struct {
 	StatusText string
 }
 
-var claudeListLine = regexp.MustCompile(`^([^:\s][^:]*):\s*(.+?)\s+-\s+(.+)$`)
+var claudeListLine = regexp.MustCompile(`^([^\s].*?):[ \t]+(.+?)\s+-\s+(.+)$`)
 
 // parseClaudeList parses `claude mcp list` output. It tolerates a leading
 // informational warning line (observed: a claude.ai-connectors notice)
@@ -101,6 +101,7 @@ func BuildClaudeResults(listOut, clientVersion string, checkedAt time.Time, list
 			ServerName:    e.Name,
 			Client:        "claude",
 			ClientVersion: clientVersion,
+			Target:        e.Descriptor,
 			ConfigState:   configState,
 			Connection:    conn,
 			AuthState:     auth,

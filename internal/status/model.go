@@ -85,6 +85,7 @@ type Result struct {
 	ServerName    string
 	Client        string
 	ClientVersion string
+	Target        string // observed URL or stdio command, when exposed
 
 	ConfigState ConfigState
 	Connection  ConnectionState
