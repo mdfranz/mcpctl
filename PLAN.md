@@ -8,6 +8,35 @@ The user maintains MCP server definitions separately across Claude Code's `.mcp.
 
 Project files remain the source of configuration; there is no fourth canonical config file in the MVP. Writes remain project-scoped. Client commands may read effective configuration and credentials from other scopes; diagnostics must distinguish that context from the project files mcpctl manages.
 
+## Implementation status (2026-09-22)
+
+Repo: https://github.com/mdfranz/mcpctl (public), branch `main`. `go build ./...`, `go vet ./...`, and `go test ./...` pass; `make install` puts `mcpctl` on `PATH` at `~/.local/bin`.
+
+### Built and tested
+
+- **`internal/config`** — canonical `Server`/`EnvVar`/`HeaderValue` model; load/parse adapters for all three clients (unmodeled fields preserved as `Extras`, unloadable entries reported as `Unsupported` rather than dropped); a surgical byte-preserving Codex TOML editor (`codex_block.go`/`codex_render.go`) that only rewrites a server's own table spans; merge-preserving Claude/OpenCode JSON writers; `BuildPlan`/`Apply` with pre-write hash-recheck, atomic per-file writes, rollback on partial failure, and a project lock file.
+- **`internal/client` + `internal/status`** — bounded, shell-safe subprocess runner; per-client parsers for `claude`/`codex`/`opencode mcp list`/`get` output, validated against real captured CLI output (fixtures in `testdata/clients/`); `status.Check` orchestrates all three concurrently and cross-references live results against each client's own project file so an entry present in the file but not reported live is flagged, not silently dropped.
+- **`internal/status/doctor.go`** — local preflight only (no live `mcp list`/`get`, no server launches): client availability, config syntax, stdio executable resolution, env var presence (never values — tested explicitly), remote URL sanity, cross-client divergent-definition findings.
+- **`internal/tui`** — Bubble Tea app: server list with per-client status columns, detail view, and `a`/`e`/`d` add/edit/delete flows through a diff preview before `Apply` (reusing the same write path, not a separate one). Compact `NAME=value` / `NAME=$` / `NAME=$:default` grammar for env/header form fields, with escaping and round-trip tests.
+- **CLI**: `mcpctl status [--json] [--dir] [--timeout]`, `mcpctl doctor [--json] [--dir]`, `mcpctl` / `mcpctl tui` (no args launches the TUI, per the CLI surface below).
+- **`Makefile`**: `build`, `test`, `vet`, `fmt`/`fmt-check`, `install`/`uninstall`, `run`, `check`.
+
+### Confirmed or corrected against real CLI behavior during implementation
+
+- Codex CLI *does* honor a project-scoped `.codex/config.toml` as this plan assumes — but only for **trusted projects** (tracked in a `[projects."<path>"]` table in `~/.codex/config.toml`, and it extends to subdirectories). An untrusted project silently gets the global-only view, which looks identical to "no project config" unless you know to check trust. `doctor`/`status` don't yet surface trust state explicitly — worth adding.
+- Claude Code's failure glyph is `✘` (U+2718 HEAVY BALLOT X), not `✗` (U+2717) as first guessed; corrected after a real project surfaced it. The "Contains(Failed)" text fallback is what actually caught it before the glyph fix landed.
+- Codex's `mcp list`/`get` report configuration only, no live connectivity (`Connection` is always `unchecked` for Codex), and expose no scope/origin field, so `status` infers project attribution by matching the reported command/URL against the project's own file rather than trusting a client-reported scope.
+- OpenCode's `mcp list` output is an ANSI box-drawing UI, not structured data or a flag-selectable format; parsed after stripping SGR escape sequences.
+
+### Deliberately not built yet (gaps against this plan)
+
+- `mcpctl sync` (dry-run/apply) and `mcpctl add`/`edit`/`delete` as direct CLI subcommands — the write path exists and is exercised by the TUI, but there's no non-interactive CLI entry point yet.
+- A dedicated conflict-resolution picker (`conflicts.go`) — divergent per-client definitions currently surface via the diff preview and via `doctor`'s pairwise-diff conflict findings, not an interactive per-field source-selection UI. `BuildPlan` takes the desired canonical state directly from the caller; it doesn't itself compute the Claude>OpenCode>Codex precedence merge.
+- The TUI's `l` auth/login client-picker handoff.
+- User-visible backup history/restore (Phase 2) and tool discovery/listing (Phase 3).
+- `status`'s "connected" classification for Claude/OpenCode is still provisional — not yet observed against a genuinely working, successfully-connected server in the wild.
+- TOML comments *inside* a table being rewritten aren't preserved (only the surrounding untouched document is byte-exact); Claude/OpenCode JSON writes preserve unknown values semantically, not original byte formatting.
+
 ## Architecture decisions
 
 1. **Full resync with preview**: every successful add/edit/delete renders the complete current project server set for all three clients. Preview changes before applying them. A standalone `sync` command supports dry runs. Resolve actual conflicts before writing; precedence supplies a suggested choice, not automatic authorization to overwrite divergent definitions.
