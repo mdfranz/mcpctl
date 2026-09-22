@@ -29,6 +29,8 @@ func run(args []string) int {
 	switch args[0] {
 	case "status":
 		return runStatus(args[1:])
+	case "doctor":
+		return runDoctor(args[1:])
 	case "-h", "--help", "help":
 		printUsage()
 		return 0
@@ -43,7 +45,8 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, `usage: mcpctl <command> [flags]
 
 commands:
-  status    show project MCP server definitions across all clients
+  status    show live project MCP server status across all clients
+  doctor    local preflight: config syntax, executables, env vars, URLs
   help      show this message`)
 }
 
@@ -123,6 +126,84 @@ func availabilityLine(a client.Availability) string {
 		return "not installed"
 	}
 	return a.Version
+}
+
+func runDoctor(args []string) int {
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	dir := fs.String("dir", ".", "project directory")
+	asJSON := fs.Bool("json", false, "print machine-readable JSON")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	report, err := status.RunDoctor(context.Background(), *dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mcpctl: %v\n", err)
+		return 2
+	}
+
+	if *asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(report); err != nil {
+			fmt.Fprintf(os.Stderr, "mcpctl: %v\n", err)
+			return 2
+		}
+		return exitCodeForDoctor(report)
+	}
+
+	printDoctorReport(report)
+	return exitCodeForDoctor(report)
+}
+
+func printDoctorReport(report *status.DoctorReport) {
+	s := report.Summary
+	fmt.Printf("clients: %d/%d available · servers checked: %d · errors: %d · warnings: %d\n\n",
+		s.ClientsAvailable, s.ClientsTotal, s.ServersChecked, s.Errors, s.Warnings)
+
+	if len(report.Findings) == 0 {
+		fmt.Println("no issues found")
+		return
+	}
+
+	for _, f := range report.Findings {
+		loc := f.Client
+		if f.ServerName != "" {
+			if loc != "" {
+				loc += "/"
+			}
+			loc += f.ServerName
+		}
+		if loc != "" {
+			loc = " [" + loc + "]"
+		}
+		fmt.Printf("%-7s %s%s: %s\n", severityLabel(f.Severity), f.Category, loc, f.Message)
+		if f.NextStep != "" {
+			fmt.Printf("        -> %s\n", f.NextStep)
+		}
+	}
+}
+
+func severityLabel(s status.DoctorSeverity) string {
+	switch s {
+	case status.SeverityError:
+		return "ERROR"
+	case status.SeverityWarning:
+		return "WARN"
+	default:
+		return "info"
+	}
+}
+
+// exitCodeForDoctor returns 1 if doctor found any error- or
+// warning-level issue, else 0. RunDoctor itself only fails (handled by
+// the caller as exit 2) on an invocation-level problem such as an
+// unreadable directory.
+func exitCodeForDoctor(report *status.DoctorReport) int {
+	if report.Summary.Errors > 0 || report.Summary.Warnings > 0 {
+		return 1
+	}
+	return 0
 }
 
 // exitCodeFor maps a Report to mcpctl's documented exit codes: 2 for any
