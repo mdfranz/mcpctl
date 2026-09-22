@@ -1,0 +1,5 @@
+Name        Command  Args  Env  Cwd  Status   Auth       
+fake-stdio  cat      -     -    -    enabled  Unsupported
+
+Name         Url                          Bearer Token Env Var  Status   Auth   
+fake-remote  https://example.invalid/mcp  -                     enabled  Unknown

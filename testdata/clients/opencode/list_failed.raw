@@ -1,0 +1,13 @@
+[0m
+┌  MCP Servers
+│
+●  ✗ fake-stdio [90mfailed
+│      MCP error -32601: Method not found
+│      [90mcat
+│
+●  ✗ fake-remote [90mfailed
+│      SSE error: Was there a typo in the url or port?
+│      [90mhttps://example.invalid/mcp
+│
+└  2 server(s)
+

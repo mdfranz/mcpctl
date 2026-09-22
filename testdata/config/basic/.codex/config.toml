@@ -1,0 +1,14 @@
+[mcp_servers.files]
+command = "mcp-server-files"
+args = ["--root", "."]
+env_vars = ["API_KEY"]
+
+[mcp_servers.files.env]
+MODE = "debug"
+
+[mcp_servers.remote-search]
+url = "https://search.example.com/mcp"
+bearer_token_env_var = "SEARCH_TOKEN"
+
+[mcp_servers.remote-search.http_headers]
+X-Client = "mcpctl"

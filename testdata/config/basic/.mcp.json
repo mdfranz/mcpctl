@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "files": {
+      "command": "mcp-server-files",
+      "args": ["--root", "."],
+      "env": {
+        "API_KEY": "${API_KEY}",
+        "REGION": "${REGION:-us-east-1}",
+        "MODE": "debug"
+      }
+    },
+    "remote-search": {
+      "type": "http",
+      "url": "https://search.example.com/mcp",
+      "headers": {
+        "Authorization": "${SEARCH_TOKEN}",
+        "X-Client": "mcpctl"
+      }
+    }
+  }
+}
