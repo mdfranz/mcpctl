@@ -22,6 +22,8 @@ const (
 	viewForm
 	viewConfirmDelete
 	viewPreview
+	viewAuth
+	viewConflict
 )
 
 // clientOrder is the fixed column/section order used throughout the TUI.
@@ -47,12 +49,20 @@ type Model struct {
 	names  []string
 	cursor int
 
-	form          formModel
-	pendingDelete string
-	plan          *config.Plan
-	previewAction string
-	applying      bool
-	applyErr      error
+	form            formModel
+	pendingDelete   string
+	plan            *config.Plan
+	previewAction   string
+	applying        bool
+	applyErr        error
+	authClient      string
+	authServer      string
+	authClients     []string
+	authCursor      int
+	authErr         error
+	conflictName    string
+	conflictClients []string
+	conflictCursor  int
 
 	quitting bool
 }
@@ -82,6 +92,8 @@ type statusLoadedMsg struct {
 	report *status.Report
 	err    error
 }
+
+type authFinishedMsg struct{ err error }
 
 func loadConfigCmd(dir string) tea.Cmd {
 	return func() tea.Msg {
@@ -134,6 +146,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loadingCfg = true
 		return m, loadConfigCmd(m.dir)
 
+	case authFinishedMsg:
+		m.authErr = msg.err
+		if msg.err == nil {
+			m.view = viewDetail
+		}
+		m.loadingStat = true
+		return m, loadStatusCmd(m.dir, m.timeout)
+
 	case tea.KeyMsg:
 		switch m.view {
 		case viewForm:
@@ -142,6 +162,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateConfirmDelete(msg)
 		case viewPreview:
 			return m.updatePreview(msg)
+		case viewAuth:
+			return m.updateAuth(msg)
+		case viewConflict:
+			return m.updateConflict(msg)
 		default:
 			return m.handleKey(msg)
 		}
@@ -198,12 +222,34 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		name := m.names[m.cursor]
+		if clients := m.conflictFor(name); len(clients) > 1 {
+			m.conflictName = name
+			m.conflictClients = clients
+			m.conflictCursor = 0
+			m.view = viewConflict
+			return m, nil
+		}
 		srv, ok := m.canonicalServer(name)
 		if !ok {
 			return m, nil
 		}
 		m.form = newEditForm(name, srv)
 		m.view = viewForm
+	case "l":
+		if len(m.names) == 0 {
+			return m, nil
+		}
+		name := m.names[m.cursor]
+		clients := m.clientsFor(name)
+		if len(clients) == 0 {
+			return m, nil
+		}
+		m.authServer = name
+		m.authClients = clients
+		m.authCursor = 0
+		m.authClient = clients[0]
+		m.authErr = nil
+		m.view = viewAuth
 	case "d":
 		if len(m.names) == 0 {
 			return m, nil
@@ -248,6 +294,10 @@ func (m Model) View() string {
 		return m.renderConfirmDelete()
 	case viewPreview:
 		return m.renderPreview()
+	case viewAuth:
+		return m.renderAuth()
+	case viewConflict:
+		return m.renderConflict()
 	default:
 		return m.renderList()
 	}
@@ -293,4 +343,14 @@ func (m Model) fileServer(clientName, serverName string) (config.Server, bool) {
 		return srv, ok
 	}
 	return config.Server{}, false
+}
+
+func (m Model) clientsFor(serverName string) []string {
+	var clients []string
+	for _, clientName := range clientOrder {
+		if _, ok := m.fileServer(clientName, serverName); ok {
+			clients = append(clients, clientName)
+		}
+	}
+	return clients
 }

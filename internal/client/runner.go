@@ -8,8 +8,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"time"
+
+	"github.com/mdfranz/mcpctl/internal/logging"
 )
 
 // maxOutputBytes bounds how much of a subprocess's stdout/stderr is kept,
@@ -54,6 +57,11 @@ func Run(ctx context.Context, dir string, timeout time.Duration, argv ...string)
 	start := time.Now()
 	err := cmd.Run()
 	dur := time.Since(start)
+	exitCode := -1
+	if cmd.ProcessState != nil {
+		exitCode = cmd.ProcessState.ExitCode()
+	}
+	slog.Info("client_command", "command", logging.CommandName(argv), "duration_ms", dur.Milliseconds(), "exit_code", exitCode, "timed_out", runCtx.Err() == context.DeadlineExceeded)
 
 	res := Result{
 		Argv:      argv,

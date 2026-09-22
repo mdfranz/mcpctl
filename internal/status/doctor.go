@@ -296,6 +296,9 @@ func checkServer(dir, clientName, name string, srv config.Server, add func(Findi
 		}
 	case config.ServerTypeRemote:
 		checkRemoteURL(clientName, name, srv.URL, add)
+		if clientName == "opencode" {
+			checkOpenCodeInterpolation(name, srv, add)
+		}
 		for _, h := range srv.Headers {
 			if h.Kind != config.EnvVarPassthrough {
 				continue
@@ -304,6 +307,21 @@ func checkServer(dir, clientName, name string, srv config.Server, add func(Findi
 		}
 		if srv.BearerTokenEnvVar != "" {
 			checkEnvVar(clientName, name, srv.BearerTokenEnvVar, false, add)
+		}
+	}
+}
+
+// OpenCode uses {env:NAME} substitution. A shell-style ${NAME} in an
+// opencode.json value is treated as a literal string and commonly causes
+// authenticated remote servers to fail during startup.
+func checkOpenCodeInterpolation(serverName string, srv config.Server, add func(Finding)) {
+	for headerName, header := range srv.Headers {
+		if header.Kind == config.EnvVarLiteral && strings.Contains(header.Value, "${") {
+			add(Finding{
+				Category: "syntax", Client: "opencode", ServerName: serverName, Severity: SeverityError,
+				Message:  fmt.Sprintf("header %q uses shell-style ${VAR}; OpenCode requires {env:VAR} substitution", headerName),
+				NextStep: "replace ${VAR} with {env:VAR} in opencode.json (for example, Bearer {env:ONELEET_API_KEY})",
+			})
 		}
 	}
 }
