@@ -92,6 +92,31 @@ func TestParseClaudeGet_ProjectScope(t *testing.T) {
 	if scope := parseClaudeScope(out); scope != ScopeProject {
 		t.Errorf("scope = %v, want project", scope)
 	}
+	scope, source, confidence := parseClaudeAttribution(out)
+	if scope != ScopeProject || source != SourceProject || confidence != SourceConfirmed {
+		t.Errorf("attribution = %v/%v/%v, want project/project/confirmed", scope, source, confidence)
+	}
+}
+
+func TestParseClaudeAttribution_Sources(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		source SourceKind
+	}{
+		{"user", "Scope: User config", SourceUser},
+		{"global", "Scope: Global config", SourceGlobal},
+		{"plugin", "Scope: Plugin config", SourcePlugin},
+		{"managed", "Scope: Managed config", SourceManaged},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, source, confidence := parseClaudeAttribution(tt.output)
+			if source != tt.source || confidence != SourceConfirmed {
+				t.Errorf("parseClaudeAttribution() = %v/%v, want %v/confirmed", source, confidence, tt.source)
+			}
+		})
+	}
 }
 
 func TestBuildClaudeResults_UsesGetForScope(t *testing.T) {
@@ -152,6 +177,9 @@ func TestParseCodexList_JSON(t *testing.T) {
 	}
 	if stdio.Scope != ScopeProject {
 		t.Errorf("fake-stdio Scope = %v, want project (command matches project definition)", stdio.Scope)
+	}
+	if stdio.Source != SourceProject || stdio.SourceConfidence != SourceInferred {
+		t.Errorf("fake-stdio source = %v/%v, want project/inferred", stdio.Source, stdio.SourceConfidence)
 	}
 
 	remote := byName["fake-remote"]

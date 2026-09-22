@@ -56,7 +56,12 @@ type rawClaudeServer struct {
 // LoadClaude reads and parses dir/.mcp.json. A missing file is not an
 // error: Exists is false and Servers is empty.
 func LoadClaude(dir string) (*ClaudeSnapshot, error) {
-	path := filepath.Join(dir, ClaudeConfigFile)
+	return LoadClaudeFile(filepath.Join(dir, ClaudeConfigFile))
+}
+
+// LoadClaudeFile reads a Claude MCP JSON document from an explicit path.
+// It is used for read-only attribution of user-level configuration.
+func LoadClaudeFile(path string) (*ClaudeSnapshot, error) {
 	snap := &ClaudeSnapshot{
 		Path:          path,
 		Servers:       map[string]Server{},
